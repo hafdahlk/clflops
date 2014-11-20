@@ -111,22 +111,22 @@ int main(int argc, char* argv[])
         }
     }
 
-    cl::Context context({devices[1]});
+    cl::Context context({devices[0]});
     cl::Program::Sources source;
     string code =
-        "void kernel thread_add(global const float* A, global const float* B, global float* C)"
+        "void kernel thread_add(global const float* A, global const float* B)"
         "{"
-        "    C[get_global_id(0)] = (volatile float)A[get_global_id(0)] + B[get_global_id(0)];"
-        "    C[get_global_id(0)] = (volatile float)A[get_global_id(0)] - B[get_global_id(0)];"
-        "    C[get_global_id(0)] = (volatile float)A[get_global_id(0)] * B[get_global_id(0)];"
-        "    C[get_global_id(0)] = (volatile float)A[get_global_id(0)] / B[get_global_id(0)];"
+        "    (volatile float)A[get_global_id(0)] + B[get_global_id(0)];"
+        "    (volatile float)A[get_global_id(0)] - B[get_global_id(0)];"
+        "    (volatile float)A[get_global_id(0)] * B[get_global_id(0)];"
+        "    (volatile float)A[get_global_id(0)] / B[get_global_id(0)];"
         "}";
     source.push_back({code.c_str(), code.length()});
 
     cl::Program program(context, source);
-    if (program.build({devices[1]}) != CL_SUCCESS) {
+    if (program.build({devices[0]}) != CL_SUCCESS) {
         cerr << "Error building. Verify OpenCL installation." << endl;
-        cout << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[1]) << endl;
+        cout << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[0]) << endl;
         exit(1);
     }
 
@@ -137,9 +137,9 @@ int main(int argc, char* argv[])
 
     cl::Buffer buff_A(context, CL_MEM_READ_ONLY, sizeof(float) * avec.size());
     cl::Buffer buff_B(context, CL_MEM_READ_ONLY, sizeof(float) * bvec.size());
-    cl::Buffer buff_C(context, CL_MEM_READ_WRITE, sizeof(float) * cvec.size());
+    //cl::Buffer buff_C(context, CL_MEM_READ_WRITE, sizeof(float) * cvec.size());
 
-    cl::CommandQueue queue(context, devices[1]);
+    cl::CommandQueue queue(context, devices[0]);
 
     queue.enqueueWriteBuffer(buff_A, CL_TRUE, 0, sizeof(float) * avec.size(),
                              avec.data());
@@ -149,20 +149,25 @@ int main(int argc, char* argv[])
     cl::Kernel thread_add(program, "thread_add");
     thread_add.setArg(0, buff_A);
     thread_add.setArg(1, buff_B);
-    thread_add.setArg(2, buff_C);
+    //thread_add.setArg(2, buff_C);
     cl::NDRange global(avec.size());
     cl::NDRange local(1);
+    cl::Event event;
 
     struct timeval tv1, tv2;
     gettimeofday(&tv1, NULL);
-    // need to make this block...
-    queue.enqueueNDRangeKernel(thread_add, cl::NullRange, global,
-                               local);
+    for (int i = 0; i < 50; ++i) {
+        queue.enqueueNDRangeKernel(thread_add, cl::NullRange, global,
+                                   local, NULL, &event);
+        event.wait();
+    }
     gettimeofday(&tv2, NULL);
     double time = tv2.tv_sec - tv1.tv_sec +
         (tv2.tv_usec - tv1.tv_usec) * 1.0E-6;
-    cout << avec.size() * 4 / time / 1E9 << "GFLOPS" << endl;
+    cout << time << " s" << endl;
+    cout << avec.size() * 4 * 50 / time / 1E9 << " GFLOPS" << endl;
 
+    /*
     queue.enqueueReadBuffer(buff_C, CL_TRUE, 0, sizeof(float) * cvec.size(), cvec.data());
 
     // verify results are close to calculated results
@@ -173,5 +178,6 @@ int main(int argc, char* argv[])
             exit(1);
         }
     }
+    */
     return 0;
 }
