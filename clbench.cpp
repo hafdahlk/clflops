@@ -33,6 +33,7 @@
 using namespace std;
 
 const string CL_FILE_NAME("vectorops.cl");
+const string HELP_FILE_NAME("help.txt");
 
 // Initialize vec with size random values between min and max.
 template<class T>
@@ -78,6 +79,13 @@ void list_devices(vector<cl::Platform>& platforms, vector<cl::Device>& devices)
         cout << "[" << i << "] " <<
             devices.at(i).getInfo<CL_DEVICE_NAME>() << endl;
     }
+}
+
+void print_help()
+{
+    ifstream help(HELP_FILE_NAME);
+    cout << string((istreambuf_iterator<char>(help)),
+                   istreambuf_iterator<char>());
 }
 
 // Parse command line input for memory size.
@@ -197,6 +205,7 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
+    // Concatenate all platform devices into one device vector.
     for (auto& platform: platforms) {
         vector<cl::Device> tmp;
         platform.getDevices(CL_DEVICE_TYPE_ALL, &tmp);
@@ -206,25 +215,29 @@ int main(int argc, char* argv[])
     // Parse command line options
     bool list_devices_flag = false;
     int opt;
-    while ((opt = getopt(argc, argv, ":ls:")) != -1) {
+    while ((opt = getopt(argc, argv, ":ls:h")) != -1) {
         switch (opt) {
         case 'l':
             if (list_devices_flag)
                 break;
             list_devices_flag = true;
-            list_devices(platforms, devices);
             break;
         case 's':
             set_memory_test_size(optarg, memory_test_size);
             break;
+        case 'h':
+            print_help();
+            exit(0);
         default:
-            cerr << "Unexpected case in getopt switch" << endl;
+            print_help();
             exit(1);
         }
     }
 
-    if (list_devices_flag)
+    if (list_devices_flag) {
+        list_devices(platforms, devices);
         exit(0);
+    }
 
     if (optind < argc) {
         device_index_set = true;
