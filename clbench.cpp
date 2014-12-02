@@ -1,5 +1,5 @@
 /******************************************************************************\
-* Benchmarking tool to measure FLOPS on devices that support OpenCL.           *
+* Benchmarking tool to compare devices that support OpenCL.                    *
 * Copyright (C) 2015 Kenneth Hafdahl                                           *
 *                                                                              *
 * This program is free software; you can redistribute it and/or                *
