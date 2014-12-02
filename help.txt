@@ -1,0 +1,7 @@
+Usage: clbench [clDeviceIndex] [options]
+Options:
+  -l        Display all available OpenCL devices
+  -s=<size> Set avalailable benchmark memory to size bytes. Supports postfix
+            notation with "M" as megabyte and "G" as gigabyte.
+
+Example: clbench 0 -s 256M
