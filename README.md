@@ -1,4 +1,4 @@
 clflops
 =======
 
-Benchmarking tool to comapere devices that support OpenCL.
+Benchmarking tool to compare devices that support OpenCL.
