@@ -106,6 +106,36 @@ void set_memory_test_size(const string& size, long unsigned& memory_test_size)
     }
 }
 
+template <class T>
+void run_bench_function(cl::CommandQueue& queue, cl::Kernel& func, const T& data,
+                        const cl::Buffer& buff, size_t global_size, size_t local_size = 1)
+{
+    cl::NDRange global(global_size);
+    cl::NDRange local(local_size);
+    cl::Event event;
+    struct timeval tv1, tv2;
+
+    queue.enqueueWriteBuffer(buff, CL_TRUE, 0, sizeof(float) * data.size(),
+                             data.data());
+
+    gettimeofday(&tv1, NULL);
+    queue.enqueueNDRangeKernel(func, cl::NullRange,
+                               global, local, NULL, &event);
+    event.wait();
+    gettimeofday(&tv2, NULL);
+    double time = tv2.tv_sec - tv1.tv_sec +
+        (tv2.tv_usec - tv1.tv_usec) * 1.0E-6;
+
+    T verify(data.size() / 100);
+    queue.enqueueReadBuffer(buff, CL_TRUE, 0, sizeof(float) * verify.size(),
+                            verify.data());
+    if (!verify_data(verify)) {
+        cerr << "Invalid computation from device." << endl;
+        return;
+    }
+
+    cout << data.size() / time / 1.0E6 << "M Elements Per Second" << endl;
+}
 
 // Compile and run benchmarking functions on OpenCL device.
 void run_vector_ops(cl::Device& device, const string& code, vector<float>& data)
@@ -114,20 +144,14 @@ void run_vector_ops(cl::Device& device, const string& code, vector<float>& data)
     cl::Context context({device});
     cl::Program::Sources source;
     source.push_back({code.c_str(), code.length()});
-
     cl::Program program(context, source);
     if (program.build({device}) != CL_SUCCESS) {
         cerr << "Error building. Verify OpenCL installation." << endl;
         cout << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << endl;
         exit(1);
     }
-
     cl::Buffer buff(context, CL_MEM_READ_WRITE, sizeof(float) * data.size());
-
     cl::CommandQueue queue(context, device);
-
-    queue.enqueueWriteBuffer(buff, CL_TRUE, 0, sizeof(float) * data.size(),
-                             data.data());
 
     // Run range based benchmark
     cout << setw(15) << left << "Range Based:";
@@ -135,59 +159,14 @@ void run_vector_ops(cl::Device& device, const string& code, vector<float>& data)
     range_op.setArg(0, buff);
     int size = data.size();
     range_op.setArg(1, size);
-
     size_t nthreads = device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
-    cl::NDRange global(nthreads);
-    cl::NDRange local(1);
-    cl::Event event;
-
-    struct timeval tv1, tv2;
-    gettimeofday(&tv1, NULL);
-    queue.enqueueNDRangeKernel(range_op, cl::NullRange,
-                               global, local, NULL, &event);
-    event.wait();
-    gettimeofday(&tv2, NULL);
-    double time = tv2.tv_sec - tv1.tv_sec +
-        (tv2.tv_usec - tv1.tv_usec) * 1.0E-6;
-
-    vector<float> verify(data.size() / 100);
-    queue.enqueueReadBuffer(buff, CL_TRUE, 0, sizeof(float) * verify.size(),
-                            verify.data());
-    if (!verify_data(verify)) {
-        cerr << "Invalid computation from device." << endl;
-        return;
-    }
-
-    cout << data.size() / time / 1.0E6 << "M Elements Per Second" << endl;
-
-    queue.enqueueWriteBuffer(buff, CL_TRUE, 0, sizeof(float) * data.size(),
-                             data.data());
+    run_bench_function(queue, range_op, data, buff, nthreads);
 
     // Run element based benchmark
     cout << setw(15) << "Element Based:";
     cl::Kernel element_op(program, "element_op");
     element_op.setArg(0, buff);
-
-    global = cl::NDRange(data.size());
-
-    gettimeofday(&tv1, NULL);
-    queue.enqueueNDRangeKernel(element_op, cl::NullRange,
-                               global, local, NULL,
-                               &event);
-    event.wait();
-    gettimeofday(&tv2, NULL);
-    time = tv2.tv_sec - tv1.tv_sec +
-           (tv2.tv_usec - tv1.tv_usec) * 1.0E-6;
-
-    queue.enqueueReadBuffer(buff, CL_TRUE, 0, sizeof(float) * verify.size(),
-                            verify.data());
-    if (!verify_data(verify)) {
-        cerr << "Invalid computation from device." << endl;
-        return;
-    }
-
-    cout << data.size() / time / 1.0E6 << "M Elements Per Second" << endl;
-    cout << endl;
+    run_bench_function(queue, element_op, data, buff, data.size());
 }
 
 int main(int argc, char* argv[])
